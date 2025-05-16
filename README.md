@@ -41,6 +41,32 @@ Hey there! This document walks you through our system's evolution from a single-
 
 ## 1. Where We Started
 
+### Current Architecture
+Let's look at our current setup - it's a classic monolith running on a single EC2 instance:
+
+```mermaid
+graph TD
+    subgraph "Current Monolithic Architecture"
+    Client[Web/Mobile Clients]
+    API[API Gateway/Load Balancer]
+    EC2[Single EC2 Instance]
+    S3[S3 Storage]
+    
+    Client --> API
+    API --> EC2
+    EC2 --> S3
+    
+    subgraph "Monolith Components"
+        EC2 --> Auth[Authentication]
+        EC2 --> Ingest[Image Ingest]
+        EC2 --> Search[Search Engine]
+        EC2 --> Index[Indexing]
+        EC2 --> Serve[Image Serving]
+        EC2 --> Store[Storage Manager]
+    end
+    end
+```
+
 ### What We Have Now
 Here's what we're working with:
 - Everything runs on one EC2 instance (yes, really!)
@@ -87,52 +113,35 @@ Here's what makes this journey worth it:
 - Lightning-fast experience for our users
 
 ## 3. Infrastructure Modernization
-Let's look at our current setup - it's a classic monolith running on a single EC2 instance. While it's served us well, we've hit some growing pains:
+
+### Frontend Layer
+Let's start with modernizing how users interact with our system. Here's our new frontend architecture:
 
 ```mermaid
-graph TD
-    subgraph "Current Monolithic Architecture"
-    Client[Web/Mobile Clients]
-    API[API Gateway/Load Balancer]
-    EC2[Single EC2 Instance]
-    S3[S3 Storage]
-    
-    Client --> API
-    API --> EC2
-    EC2 --> S3
-    
-    subgraph "Monolith Components"
-        EC2 --> Auth[Authentication]
-        EC2 --> Ingest[Image Ingest]
-        EC2 --> Search[Search Engine]
-        EC2 --> Index[Indexing]
-        EC2 --> Serve[Image Serving]
-        EC2 --> Store[Storage Manager]
-    end
-    end
+flowchart TD
+    Users["Global Users"] --> Route53["Route 53 Global DNS"]
+    Route53 --> CDN("CloudFront CDN")
+    CDN --> ALB["Application Load Balancer"]
+    ALB --> Services["Backend Services"]
 ```
 
-### What We Have Now
-Here's what we're working with:
-- Everything runs on one EC2 instance (yes, really!)
-- We've got a basic API Gateway/Load Balancer handling traffic
-- S3 takes care of our image storage
-- Our monolithic app includes:
-  - Authentication system
-  - Image ingestion service
-  - Search engine
-  - Indexing system
-  - Image serving capability
-  - Storage management
-  - Third-party API integrations
+#### Components
+1. **Global DNS (Route 53)**
+   - Global DNS service for routing
+   - Health checks and failover
+   - Latency-based routing
 
-### Pain Points We're Solving
-- Can't scale when we need to
-- If our server goes down, everything goes down
-- All our code is tightly coupled - change one thing, worry about everything
-- Updates are becoming a nightmare
-- We're constantly running into resource limits
-- Deployments are rigid and risky
+2. **Content Delivery Network (CloudFront)**
+   - Edge caching for improved performance
+   - Global content delivery
+   - DDoS protection with Shield
+   - Static asset optimization
+
+3. **Load Balancing (ALB)**
+   - SSL/TLS termination
+   - Health checks implementation
+   - Traffic distribution
+   - Path-based routing
 
 ## 2. The Transformation Begins
 Here's how we're leveling up our infrastructure:
