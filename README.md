@@ -37,6 +37,14 @@ Hey there! This document walks you through our system's evolution from a single-
    - [Developer Access](#6-developer-access-made-safe)
    - [Storage Optimization](#7-smart-storage-happy-wallet)
 
+7. [Additional Considerations](#additional-considerations)
+   - [Service Mesh vs Istio](#service-mesh-vs-istio)
+   - [EKS Components](#eks-components)
+   - [Ruby on Rails Considerations](#ruby-on-rails-considerations)
+   - [Scaling Strategy](#scaling-strategy)
+   - [Network Architecture](#network-layer-architecture)
+   - [Database Recommendations](#database-recommendations)
+
 ---
 
 ## 1. Where We Started
@@ -50,11 +58,11 @@ graph TD
     Client[Web/Mobile Clients]
     API[API Gateway/Load Balancer]
     EC2[Single EC2 Instance]
-    S3[S3 Storage]
+    DDB[DynamoDB Storage]
     
     Client --> API
     API --> EC2
-    EC2 --> S3
+    EC2 --> DDB
     
     subgraph "Monolith Components"
         EC2 --> Auth[Authentication]
@@ -70,8 +78,8 @@ graph TD
 ### What We Have Now
 Here's what we're working with:
 - Everything runs on one EC2 instance (yes, really!)
-- We've got a basic API Gateway/Load Balancer handling traffic
-- S3 takes care of our image storage
+- We've got a basic Load Balancer handling traffic
+- DynamoDB takes care of our data storage
 - Our monolithic app includes:
   - Authentication system
   - Image ingestion service
@@ -143,14 +151,11 @@ flowchart TD
    - Traffic distribution
    - Path-based routing
 
-
-
 ### Authentication Layer
 ```mermaid
 flowchart TD
     subgraph Auth["Authentication Layer"]
-        APIGateway["API Gateway"] --> AuthService["Authentication Service (Cognito)"]
-        AuthService --> IAM["Identity & Access Management"]
+        AuthService["Authentication Service (Cognito)"] --> IAM["Identity & Access Management"]
         AuthService --> SecretsManager["AWS Secrets Manager"]
     end
 ```
@@ -186,8 +191,8 @@ graph TD
     
     subgraph "Storage"
         ES[Elasticsearch]
-        S3[S3 - Image Storage]
         Cache[Redis Cache]
+        DDB[DynamoDB]
     end
     
     Client --> CDN
@@ -199,10 +204,12 @@ graph TD
     ALB --> Index
     
     Search --> ES
-    Serve --> S3
     Serve --> Cache
-    Ingest --> S3
+    Serve --> DDB
+    Ingest --> DDB
     Index --> ES
+    Auth --> DDB
+    Search --> DDB
     end
 ```
 
@@ -240,10 +247,9 @@ flowchart TD
     Users["Global Users (50M)"] --> Route53["Route 53 Global DNS"]
     Route53 --> CDN("CloudFront CDN")
     CDN --> ALB["Application Load Balancer"]
-    ALB --> APIGateway["API Gateway"]
     
     subgraph Auth["Authentication Layer"]
-        APIGateway --> AuthService["Authentication Service (Cognito)"]
+        ALB --> AuthService["Authentication Service (Cognito)"]
         AuthService --> IAM["Identity & Access Management"]
         AuthService --> SecretsManager["AWS Secrets Manager"]
     end
@@ -251,7 +257,7 @@ flowchart TD
     subgraph ApplicationLayer["Microservices"]
         direction TB
         subgraph EKSCluster["Amazon EKS Cluster"]
-            subgraph ServiceMesh["AWS App Mesh"]
+            subgraph ServiceMesh["Service Mesh"]
                 ImageIngest["Image Ingest Service"]
                 SearchService["Search Service"]
                 ImageServing["Image Serving Service"]
@@ -283,21 +289,28 @@ flowchart TD
     subgraph DataStorage["Data Storage Layer"]
         direction TB
         subgraph Primary["Primary Region"]
-            S3Primary["S3 (Raw Images)"]
             DDBPrimary["DynamoDB (Metadata)"]
-            ESPrimary["OpenSearch (Search Index)"]
+            ESPrimary["Elasticsearch (Search Index)"]
+            CachePrimary["Redis Cache"]
         end
         
-        ImageIngest --> S3Primary
+        subgraph DR["Disaster Recovery Region"]
+            DDBDR["DynamoDB Global Tables"]
+            ESDR["Elasticsearch (Replica)"]
+            CacheDR["Redis Cache Replica"]
+        end
+        
+        ImageIngest --> DDBPrimary
         SearchService --> ESPrimary
-        ImageServing --> S3Primary
+        ImageServing --> DDBPrimary
         IndexingService --> ESPrimary
+        DDBPrimary <--> DDBDR
+        ESPrimary <--> ESDR
+        CachePrimary <--> CacheDR
     end
 ```
 
 ### Microservices Architecture
-Each monolithic component is transformed into an independent service:
-
 ```mermaid
 graph TD
     subgraph "Modernized Architecture"
@@ -315,8 +328,8 @@ graph TD
     
     subgraph "Storage"
         ES[Elasticsearch]
-        S3[S3 - Image Storage]
         Cache[Redis Cache]
+        DDB[DynamoDB]
     end
     
     Client --> CDN
@@ -328,17 +341,20 @@ graph TD
     ALB --> Index
     
     Search --> ES
-    Serve --> S3
     Serve --> Cache
-    Ingest --> S3
+    Serve --> DDB
+    Ingest --> DDB
     Index --> ES
+    Auth --> DDB
+    Search --> DDB
     end
 ```
 
+### EKS Cluster Architecture
 ```mermaid
 flowchart TD
     subgraph EKSCluster["Amazon EKS Cluster"]
-        subgraph ServiceMesh["AWS App Mesh"]
+        subgraph ServiceMesh["Service Mesh"]
             ImageIngest["Image Ingest Service"]
             SearchService["Search Service"]
             ImageServing["Image Serving Service"]
@@ -354,32 +370,6 @@ flowchart TD
     end
 ```
 
-1. **Authentication Service**
-   - User authentication and authorization
-   - Token-based access management
-   - Security policy enforcement
-
-2. **Image Processing Services**
-   - Image Ingestion Service
-     - Upload handling
-     - Image validation
-     - Format processing
-   
-   - Image Serving Service
-     - Optimized delivery
-     - Format conversion
-     - Resolution adaptation
-
-3. **Search and Indexing**
-   - Search Service
-     - Query processing
-     - Results ranking
-     - Search optimization
-   
-   - Indexing Service
-     - Metadata extraction
-     - Index management
-     - Tag processing
 
 ## 4. Storage Layer Enhancement
 
@@ -417,43 +407,86 @@ flowchart TD
 ### Data Storage Architecture
 ```mermaid
 flowchart TD
-    subgraph DataStorage["Data Storage Layer"]
+    subgraph StorageLayer["Storage Layer"]
         subgraph Primary["Primary Region"]
-            S3Primary["S3 (Raw Images)"]
             DDBPrimary["DynamoDB (Metadata)"]
-            ESPrimary["OpenSearch (Search Index)"]
+            ESPrimary["Elasticsearch (Search Index)"]
+            CachePrimary["Redis Cache"]
         end
         
         subgraph DR["Disaster Recovery Region"]
-            S3DR["S3 (Replica)"]
             DDBDR["DynamoDB Global Tables"]
-            ESDR["OpenSearch (Replica)"]
+            ESDR["Elasticsearch (Replica)"]
+            CacheDR["Redis Cache Replica"]
         end
         
-        ImageIngest["Image Ingest Service"] --> S3Primary
-        IndexingService["Indexing Service"] --> S3Primary
-        S3Primary <--> S3DR
+        ImageIngest["Image Ingest Service"] --> DDBPrimary
+        SearchService["Search Service"] --> ESPrimary
+        ImageServing["Image Serving Service"] --> DDBPrimary
+        IndexingService["Indexing Service"] --> ESPrimary
         DDBPrimary <--> DDBDR
         ESPrimary <--> ESDR
+        CachePrimary <--> CacheDR
     end
 ```
 
-#### Storage Components
-1. **Object Storage (S3)**
-   - Raw image storage
+### Storage Components
+1. **Data Storage (DynamoDB)**
+   - Metadata storage
    - Cross-region replication
-   - Lifecycle management
-   - Intelligent tiering
-
-2. **Metadata Store (DynamoDB)**
-   - Global tables for replication
    - Auto-scaling
    - Point-in-time recovery
 
-3. **Search Engine (OpenSearch)**
+2. **Search Engine (Elasticsearch)**
    - Full-text search
    - Analytics capabilities
    - Cross-region replication
+
+3. **Caching Layer (Redis)**
+   - Session management
+   - Frequently accessed data
+   - Real-time analytics
+   - Pub/sub messaging
+
+### Cost Optimization
+```mermaid
+flowchart TD
+    subgraph CostOptimization["Cost Optimization"]
+        DDBLifeCycle["DynamoDB Auto-scaling"]
+        AutoScaling["Auto Scaling Groups"]
+        CacheOptimization["Redis Cache Optimization"]
+        
+        DDBPrimary["DynamoDB Primary"] --> DDBLifeCycle
+        ServiceMesh["Service Mesh"] --> AutoScaling
+        DDBPrimary --> CacheOptimization
+    end
+```
+
+### Cost Management Components
+1. **Storage Optimization**
+   - DynamoDB auto-scaling
+   - Redis Cache optimization
+   - EBS volume optimization
+   - RDS storage optimization
+
+2. **Compute Optimization**
+   - Auto Scaling Groups
+   - Spot Instance usage
+   - Reserved Instance planning
+   - Resource right-sizing
+
+### Cost Control Strategies
+1. **Resource Management**
+   - Utilization monitoring
+   - Cost allocation tags
+   - Budget alerts
+   - Usage analytics
+
+2. **Performance Optimization**
+   - Cache utilization
+   - Query optimization
+   - Traffic management
+   - Resource scheduling
 
 ## 5. Container Orchestration
 
@@ -582,22 +615,22 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph CostOptimization["Cost Optimization"]
-        S3LifeCycle["S3 Lifecycle Policies"]
+        DDBLifeCycle["DynamoDB Auto-scaling"]
         AutoScaling["Auto Scaling Groups"]
-        S3Intelligence["S3 Intelligence Tiering"]
+        CacheOptimization["Redis Cache Optimization"]
         
-        S3Primary["S3 Primary"] --> S3LifeCycle
+        DDBPrimary["DynamoDB Primary"] --> DDBLifeCycle
         ServiceMesh["Service Mesh"] --> AutoScaling
-        S3Primary --> S3Intelligence
+        DDBPrimary --> CacheOptimization
     end
 ```
 
 ### Cost Management Components
 1. **Storage Optimization**
-   - S3 Lifecycle Policies
-   - Intelligent Tiering
-   - Storage class analysis
-   - Automatic archival
+   - DynamoDB auto-scaling
+   - Redis Cache optimization
+   - EBS volume optimization
+   - RDS storage optimization
 
 2. **Compute Optimization**
    - Auto Scaling Groups
@@ -777,4 +810,122 @@ Here's how our devs get in:
    - Image compression on upload
    - Text compression for logs
    - Database compression
+
+## Additional Considerations
+
+### Service Mesh vs Istio
+We chose Service Mesh over Istio for the following reasons:
+1. Native AWS integration
+2. Simpler management
+3. Lower operational overhead
+4. Better cost efficiency
+5. AWS support and maintenance
+
+### EKS Components
+The listed EKS components are our planned implementation:
+1. **Node Groups**
+   - Managed node groups for worker nodes
+   - Spot instances for cost optimization
+   - On-demand instances for critical workloads
+
+2. **Fargate Profiles**
+   - Serverless compute for containers
+   - Automatic scaling
+   - Pay-per-use pricing
+
+3. **Scaling Components**
+   - Horizontal Pod Autoscaler
+   - Cluster Autoscaler
+   - Vertical Pod Autoscaler
+
+### Ruby on Rails Considerations
+For a Ruby on Rails application:
+1. **Containerization**
+   - Multi-stage Docker builds
+   - Asset precompilation in build
+   - Environment-specific configurations
+
+2. **Database**
+   - PostgreSQL on RDS
+   - Redis for caching
+   - Sidekiq for background jobs
+
+3. **Deployment**
+   - Zero-downtime deployments
+   - Database migrations strategy
+   - Asset pipeline optimization
+
+### Scaling Strategy
+1. **Load Balancer Level**
+   - ALB in each region
+   - Cross-zone load balancing
+   - Health checks and failover
+
+2. **Route 53**
+   - Latency-based routing
+   - Health checks
+   - Failover routing
+
+3. **Service Duplication**
+   - DynamoDB Global Tables
+   - RDS Read Replicas
+   - Redis Cache Replication
+
+### Network Architecture
+```mermaid
+flowchart TD
+    subgraph NetworkArchitecture["Multi-Region Network Architecture"]
+        subgraph Region1["Primary Region"]
+            subgraph PublicSubnet1["Public Subnet"]
+                ALB1["Application Load Balancer"]
+                NAT1["NAT Gateway"]
+            end
+            
+            subgraph PrivateSubnet1["Private Subnet"]
+                EKS1["EKS Cluster"]
+                RDS1["RDS Instance"]
+            end
+        end
+        
+        subgraph Region2["Secondary Region"]
+            subgraph PublicSubnet2["Public Subnet"]
+                ALB2["Application Load Balancer"]
+                NAT2["NAT Gateway"]
+            end
+            
+            subgraph PrivateSubnet2["Private Subnet"]
+                EKS2["EKS Cluster"]
+                RDS2["RDS Instance"]
+            end
+        end
+        
+        Route53["Route 53"] --> ALB1
+        Route53 --> ALB2
+        ALB1 --> EKS1
+        ALB2 --> EKS2
+    end
+```
+
+### Database Recommendations
+1. **Primary Database (RDS)**
+   - PostgreSQL for relational data
+   - Multi-AZ deployment
+   - Read replicas for scaling
+   - Automated backups
+
+2. **Hot Storage**
+   - ElastiCache Redis for caching
+   - DynamoDB for key-value storage
+   - RDS for relational data
+
+3. **Data Replication**
+   - DynamoDB Global Tables for multi-region
+   - RDS Read Replicas for read scaling
+   - Redis Cache replication for high availability
+
+4. **Backup Strategy**
+   - Automated RDS snapshots
+   - DynamoDB point-in-time recovery
+   - Redis backup and restore
+   - Cross-region replication
 
