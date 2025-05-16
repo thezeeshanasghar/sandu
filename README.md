@@ -3,58 +3,90 @@
 Hey there! This document walks you through our system's evolution from a single-server monolith to a scalable, cloud-native powerhouse. Whether you're a developer, architect, or stakeholder, you'll find everything you need to understand our transformation journey.
 
 ## Quick Navigation
-1. [Current System Architecture](#1-current-system-architecture)
-   - [Components](#components)
-   - [Limitations](#limitations)
+1. [Where We Started](#1-where-we-started)
+   - [Current Setup](#what-we-have-now)
+   - [Pain Points](#pain-points-were-solving)
 
-2. [Infrastructure Modernization](#2-infrastructure-modernization)
+2. [Our Transformation Plan](#2-our-transformation-plan)
+   - [Game Plan](#our-game-plan)
+   - [Expected Benefits](#what-well-gain)
+
+3. [Infrastructure Modernization](#3-infrastructure-modernization)
    - [Frontend Layer](#frontend-layer)
    - [Authentication Layer](#authentication-layer)
 
-3. [Service Decomposition](#3-service-decomposition)
-   - [Proposed Architecture Overview](#proposed-architecture-overview)
+4. [Service Decomposition](#4-service-decomposition)
+   - [Architecture Overview](#proposed-architecture-overview)
    - [Request Flow](#request-flow)
-   - [Service Communication Architecture](#service-communication-architecture)
-   - [Microservices Architecture](#microservices-architecture)
-   - [Service Components](#core-services)
+   - [Service Communication](#service-communication-architecture)
+   - [Core Services](#core-services)
 
-4. [Storage Layer Enhancement](#4-storage-layer-enhancement)
-   - [Caching Infrastructure](#caching-infrastructure)
-   - [Data Storage Architecture](#data-storage-architecture)
+5. [Implementation Details](#5-implementation-details)
+   - [Storage Layer](#storage-layer)
+   - [Container Orchestration](#container-orchestration)
+   - [Observability](#observability-layer)
+   - [Security](#security-implementation)
+   - [Cost Optimization](#cost-optimization)
 
-5. [Container Orchestration](#5-container-orchestration)
-   - [Amazon EKS Implementation](#amazon-eks-implementation)
-   - [Scaling Components](#scaling-components)
-
-6. [Observability Layer](#6-observability-layer)
-   - [Monitoring Components](#monitoring-components)
-   - [Logging Infrastructure](#logging-infrastructure)
-   - [Distributed Tracing](#distributed-tracing)
-
-7. [Security Implementation](#7-security-implementation)
-   - [Security Components](#security-components-1)
-   - [Compliance Framework](#compliance-framework)
-
-8. [Cost Optimization](#8-cost-optimization)
-   - [Cost Management](#cost-management-components)
-   - [Cost Control Strategies](#cost-control-strategies)
-
-9. [Implementation Timeline](#implementation-timeline)
-
-10. [Benefits](#benefits)
-
-11. [Let's Talk: Key Discussion Points](#lets-talk-key-discussion-points)
-    - [Scaling Like a Pro](#1-scaling-like-a-pro)
-    - [Going Beyond AWS?](#2-going-beyond-aws)
-    - [Zero-Downtime Deployments](#3-zero-downtime-no-sweat)
-    - [Infrastructure Management](#4-infrastructure-as-code-ftw)
-    - [Critical Metrics](#5-keep-your-eyes-on-the-prize)
-    - [Developer Access](#6-developer-access-made-safe)
-    - [Storage Optimization](#7-smart-storage-happy-wallet)
+6. [Deep Dive: Discussion Points](#lets-talk-key-discussion-points)
+   - [Scaling Strategy](#1-scaling-like-a-pro)
+   - [Third-Party Services](#2-going-beyond-aws)
+   - [Zero-Downtime Strategy](#3-zero-downtime-no-sweat)
+   - [Infrastructure as Code](#4-infrastructure-as-code-ftw)
+   - [Monitoring Approach](#5-keep-your-eyes-on-the-prize)
+   - [Developer Access](#6-developer-access-made-safe)
+   - [Storage Optimization](#7-smart-storage-happy-wallet)
 
 ---
 
 ## 1. Where We Started
+
+### What We Have Now
+Here's what we're working with:
+- Everything runs on one EC2 instance (yes, really!)
+- We've got a basic API Gateway/Load Balancer handling traffic
+- S3 takes care of our image storage
+- Our monolithic app includes:
+  - Authentication system
+  - Image ingestion service
+  - Search engine
+  - Image serving
+  - Storage management
+  - Third-party API integrations
+
+### Pain Points We're Solving
+- Can't scale when we need to
+- If our server goes down, everything goes down
+- All our code is tightly coupled - change one thing, worry about everything
+- Updates are becoming a nightmare
+- We're constantly running into resource limits
+- Deployments are rigid and risky
+
+## 2. Our Transformation Plan
+
+### Our Game Plan
+Here's how we'll tackle this transformation:
+1. First up: Setting up our new infrastructure backbone with ALB
+2. Adding CDN for that sweet performance boost
+3. Breaking down our monolith, one service at a time
+4. Supercharging our storage layer
+5. Getting our container orchestra playing in harmony
+6. Adding eyes and ears to our system (observability)
+7. Locking everything down tight (security)
+8. Making sure we're not breaking the bank (cost optimization)
+
+### What We'll Gain
+Here's what makes this journey worth it:
+- Scale up or down instantly based on demand
+- Problems in one service won't crash everything else
+- Deploy updates without sweating bullets
+- See exactly what's happening in our system
+- Use (and pay for) only what we need
+- Keep costs under control
+- Happy developers who can ship faster
+- Lightning-fast experience for our users
+
+## 3. Infrastructure Modernization
 Let's look at our current setup - it's a classic monolith running on a single EC2 instance. While it's served us well, we've hit some growing pains:
 
 ```mermaid
