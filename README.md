@@ -143,35 +143,7 @@ flowchart TD
    - Traffic distribution
    - Path-based routing
 
-## 2. The Transformation Begins
-Here's how we're leveling up our infrastructure:
 
-### Frontend Layer
-```mermaid
-flowchart TD
-    Users["Global Users (50M)"] --> Route53["Route 53 Global DNS"]
-    Route53 --> CDN("CloudFront CDN")
-    CDN --> ALB["Application Load Balancer"]
-    ALB --> APIGateway["API Gateway"]
-```
-
-#### Components
-1. **Global DNS (Route 53)**
-   - Global DNS service for routing
-   - Health checks and failover
-   - Latency-based routing
-
-2. **Content Delivery Network (CloudFront)**
-   - Edge caching for improved performance
-   - Global content delivery
-   - DDoS protection with Shield
-   - Static asset optimization
-
-3. **Load Balancing (ALB)**
-   - SSL/TLS termination
-   - Health checks implementation
-   - Traffic distribution
-   - Path-based routing
 
 ### Authentication Layer
 ```mermaid
