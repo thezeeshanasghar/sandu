@@ -1,5 +1,48 @@
 # System Evolution Documentation
 
+## Table of Contents
+1. [Current System Architecture](#1-current-system-architecture)
+   - [Components](#components)
+   - [Limitations](#limitations)
+
+2. [Infrastructure Modernization](#2-infrastructure-modernization)
+   - [Frontend Layer](#frontend-layer)
+   - [Authentication Layer](#authentication-layer)
+
+3. [Service Decomposition](#3-service-decomposition)
+   - [Proposed Architecture Overview](#proposed-architecture-overview)
+   - [Request Flow](#request-flow)
+   - [Service Communication Architecture](#service-communication-architecture)
+   - [Microservices Architecture](#microservices-architecture)
+   - [Service Components](#core-services)
+
+4. [Storage Layer Enhancement](#4-storage-layer-enhancement)
+   - [Caching Infrastructure](#caching-infrastructure)
+   - [Data Storage Architecture](#data-storage-architecture)
+
+5. [Container Orchestration](#5-container-orchestration)
+   - [Amazon EKS Implementation](#amazon-eks-implementation)
+   - [Scaling Components](#scaling-components)
+
+6. [Observability Layer](#6-observability-layer)
+   - [Monitoring Components](#monitoring-components)
+   - [Logging Infrastructure](#logging-infrastructure)
+   - [Distributed Tracing](#distributed-tracing)
+
+7. [Security Implementation](#7-security-implementation)
+   - [Security Components](#security-components-1)
+   - [Compliance Framework](#compliance-framework)
+
+8. [Cost Optimization](#8-cost-optimization)
+   - [Cost Management](#cost-management-components)
+   - [Cost Control Strategies](#cost-control-strategies)
+
+9. [Implementation Timeline](#implementation-timeline)
+
+10. [Benefits](#benefits)
+
+---
+
 ## 1. Current System Architecture
 The existing system operates as a monolithic application hosted on a single EC2 instance:
 
@@ -49,19 +92,182 @@ graph TD
 
 ## 2. Infrastructure Modernization
 
-### Load Balancing Enhancement
-- Implementation of Application Load Balancer (ALB)
-- SSL/TLS termination
-- Health checks implementation
-- Traffic distribution capabilities
+### Frontend Layer
+```mermaid
+flowchart TD
+    Users["Global Users (50M)"] --> Route53["Route 53 Global DNS"]
+    Route53 --> CDN("CloudFront CDN")
+    CDN --> ALB["Application Load Balancer"]
+    ALB --> APIGateway["API Gateway"]
+```
 
-### Content Delivery
-- Integration of Global CDN
-- Edge caching for improved performance
-- Reduced latency for global users
-- Better handling of static assets
+#### Components
+1. **Global DNS (Route 53)**
+   - Global DNS service for routing
+   - Health checks and failover
+   - Latency-based routing
+
+2. **Content Delivery Network (CloudFront)**
+   - Edge caching for improved performance
+   - Global content delivery
+   - DDoS protection with Shield
+   - Static asset optimization
+
+3. **Load Balancing (ALB)**
+   - SSL/TLS termination
+   - Health checks implementation
+   - Traffic distribution
+   - Path-based routing
+
+### Authentication Layer
+```mermaid
+flowchart TD
+    subgraph Auth["Authentication Layer"]
+        APIGateway["API Gateway"] --> AuthService["Authentication Service (Cognito)"]
+        AuthService --> IAM["Identity & Access Management"]
+        AuthService --> SecretsManager["AWS Secrets Manager"]
+    end
+```
+
+#### Security Components
+1. **Authentication Service (Cognito)**
+   - User authentication and authorization
+   - Token-based access management
+   - Social identity providers
+
+2. **Identity Management**
+   - IAM roles and policies
+   - Fine-grained access control
+   - Secrets management
 
 ## 3. Service Decomposition
+
+### Proposed Architecture Overview
+```mermaid
+graph TD
+    subgraph "Proposed Microservices Architecture"
+    Client[Web/Mobile Clients]
+    CDN[Global CDN]
+    ALB[Application Load Balancer]
+    
+    subgraph "Services"
+        Auth[Auth Service]
+        Search[Search Service]
+        Ingest[Image Ingest Service]
+        Serve[Image Serving Service]
+        Index[Indexing Service]
+    end
+    
+    subgraph "Storage"
+        ES[Elasticsearch]
+        S3[S3 - Image Storage]
+        Cache[Redis Cache]
+    end
+    
+    Client --> CDN
+    CDN --> ALB
+    ALB --> Auth
+    ALB --> Search
+    ALB --> Serve
+    ALB --> Ingest
+    ALB --> Index
+    
+    Search --> ES
+    Serve --> S3
+    Serve --> Cache
+    Ingest --> S3
+    Index --> ES
+    end
+```
+
+### Request Flow
+```mermaid
+sequenceDiagram
+    participant User
+    participant API
+    participant Auth
+    participant Search
+    participant ImageService
+    participant Cache
+    participant Storage
+
+    User->>API: Query Request
+    API->>Auth: Validate Token
+    Auth-->>API: Token Valid
+    API->>Search: Process Query
+    Search-->>API: Image Metadata
+    API->>ImageService: Fetch Image
+    ImageService->>Cache: Check Cache
+    alt Image in Cache
+        Cache-->>ImageService: Return Image
+    else Image not in Cache
+        ImageService->>Storage: Fetch Image
+        Storage-->>ImageService: Return Image
+        ImageService->>Cache: Store in Cache
+    end
+    ImageService-->>API: Return Image
+```
+
+### Service Communication Architecture
+```mermaid
+flowchart TD
+    Users["Global Users (50M)"] --> Route53["Route 53 Global DNS"]
+    Route53 --> CDN("CloudFront CDN")
+    CDN --> ALB["Application Load Balancer"]
+    ALB --> APIGateway["API Gateway"]
+    
+    subgraph Auth["Authentication Layer"]
+        APIGateway --> AuthService["Authentication Service (Cognito)"]
+        AuthService --> IAM["Identity & Access Management"]
+        AuthService --> SecretsManager["AWS Secrets Manager"]
+    end
+    
+    subgraph ApplicationLayer["Microservices"]
+        direction TB
+        subgraph EKSCluster["Amazon EKS Cluster"]
+            subgraph ServiceMesh["AWS App Mesh"]
+                ImageIngest["Image Ingest Service"]
+                SearchService["Search Service"]
+                ImageServing["Image Serving Service"]
+                IndexingService["Indexing Service"]
+            end
+            
+            subgraph EKSComponents["EKS Components"]
+                NodeGroups["Managed Node Groups"]
+                FargateProfiles["Fargate Profiles"]
+                HPA["Horizontal Pod Autoscaler"]
+                CA["Cluster Autoscaler"]
+            end
+        end
+        
+        AuthService --> ServiceMesh
+        EKSComponents --> ServiceMesh
+    end
+    
+    subgraph CacheLayer["Caching Layer"]
+        ElastiCache["ElastiCache Redis"]
+        CloudFrontCache["CloudFront Cache"]
+        DAXCache["DynamoDB DAX"]
+        
+        ImageServing --> ElastiCache
+        SearchService --> ElastiCache
+        CDN --> CloudFrontCache
+    end
+    
+    subgraph DataStorage["Data Storage Layer"]
+        direction TB
+        subgraph Primary["Primary Region"]
+            S3Primary["S3 (Raw Images)"]
+            DDBPrimary["DynamoDB (Metadata)"]
+            ESPrimary["OpenSearch (Search Index)"]
+        end
+        
+        ImageIngest --> S3Primary
+        SearchService --> ESPrimary
+        ImageServing --> S3Primary
+        IndexingService --> ESPrimary
+    end
+```
 
 ### Microservices Architecture
 Each monolithic component is transformed into an independent service:
@@ -151,22 +357,77 @@ flowchart TD
 
 ## 4. Storage Layer Enhancement
 
-### Multi-tier Storage
-1. **S3 Storage**
-   - Raw image storage
-   - Backup management
-   - Lifecycle policies
+### Caching Infrastructure
+```mermaid
+flowchart TD
+    subgraph CacheLayer["Caching Layer"]
+        ElastiCache["ElastiCache Redis"]
+        CloudFrontCache["CloudFront Cache"]
+        DAXCache["DynamoDB DAX"]
+        
+        ImageServing["Image Serving Service"] --> ElastiCache
+        SearchService["Search Service"] --> ElastiCache
+        CDN["CloudFront CDN"] --> CloudFrontCache
+    end
+```
 
-2. **Caching Layer**
-   - Redis implementation
-   - Frequently accessed data caching
-   - Performance optimization
+#### Caching Components
+1. **Application Cache (ElastiCache Redis)**
    - Session management
+   - Frequently accessed data
+   - Real-time analytics
+   - Pub/sub messaging
 
-3. **Search Database**
-   - Elasticsearch integration
-   - Full-text search capabilities
-   - Metadata indexing
+2. **CDN Cache (CloudFront)**
+   - Edge location caching
+   - Static asset optimization
+   - Dynamic content caching
+
+3. **Database Cache (DAX)**
+   - DynamoDB acceleration
+   - Microsecond latency
+   - Write-through caching
+
+### Data Storage Architecture
+```mermaid
+flowchart TD
+    subgraph DataStorage["Data Storage Layer"]
+        subgraph Primary["Primary Region"]
+            S3Primary["S3 (Raw Images)"]
+            DDBPrimary["DynamoDB (Metadata)"]
+            ESPrimary["OpenSearch (Search Index)"]
+        end
+        
+        subgraph DR["Disaster Recovery Region"]
+            S3DR["S3 (Replica)"]
+            DDBDR["DynamoDB Global Tables"]
+            ESDR["OpenSearch (Replica)"]
+        end
+        
+        ImageIngest["Image Ingest Service"] --> S3Primary
+        IndexingService["Indexing Service"] --> S3Primary
+        S3Primary <--> S3DR
+        DDBPrimary <--> DDBDR
+        ESPrimary <--> ESDR
+    end
+```
+
+#### Storage Components
+1. **Object Storage (S3)**
+   - Raw image storage
+   - Cross-region replication
+   - Lifecycle management
+   - Intelligent tiering
+
+2. **Metadata Store (DynamoDB)**
+   - Global tables for replication
+   - Auto-scaling
+   - Point-in-time recovery
+
+3. **Search Engine (OpenSearch)**
+   - Full-text search
+   - Analytics capabilities
+   - Cross-region replication
 
 ## 5. Container Orchestration
 
@@ -184,51 +445,152 @@ flowchart TD
 
 ## 6. Observability Layer
 
-### Monitoring
-- Comprehensive metrics collection
-- Performance monitoring
-- Resource utilization tracking
-- Custom dashboards
+```mermaid
+flowchart TD
+    subgraph ObservabilityLayer["Observability & Operations"]
+        CloudWatch["CloudWatch Monitoring"]
+        XRay["X-Ray Tracing"]
+        CloudTrail["CloudTrail Audit Logs"]
+        Prometheus["Amazon Managed Prometheus"]
+        Grafana["Amazon Managed Grafana"]
+        
+        ServiceMesh["AWS App Mesh"] --> CloudWatch
+        ServiceMesh --> XRay
+        ServiceMesh --> Prometheus
+        Prometheus --> Grafana
+    end
+```
 
-### Logging
-- Centralized logging
-- Log aggregation
-- Error tracking
-- Audit trails
+### Monitoring Components
+1. **Metrics Collection**
+   - CloudWatch metrics
+   - Custom metrics
+   - Resource utilization
+   - Performance metrics
+   - Prometheus metrics
 
-### Tracing
-- Distributed tracing
-- Request flow visualization
-- Latency analysis
-- Bottleneck identification
+2. **Visualization**
+   - Grafana dashboards
+   - Real-time monitoring
+   - Custom alerts
+   - Trend analysis
+
+### Logging Infrastructure
+1. **Log Aggregation**
+   - Centralized logging
+   - Log analytics
+   - Error tracking
+   - Pattern detection
+
+2. **Audit System**
+   - CloudTrail logs
+   - Security auditing
+   - Compliance reporting
+   - Access tracking
+
+### Distributed Tracing
+1. **X-Ray Implementation**
+   - Request tracing
+   - Latency analysis
+   - Error detection
+   - Service map
+
+2. **Service Mesh Monitoring**
+   - App Mesh metrics
+   - Service-to-service communication
+   - Traffic flow analysis
+   - Performance optimization
 
 ## 7. Security Implementation
 
-### Multi-layer Security
-- Network security groups
-- IAM roles and policies
-- Service-to-service authentication
-- Data encryption at rest and in transit
+```mermaid
+flowchart TD
+    subgraph SecurityLayer["Security Components"]
+        Shield["AWS Shield Advanced"]
+        WAF["AWS WAF"]
+        GuardDuty["Amazon GuardDuty"]
+        SecurityHub["AWS Security Hub"]
+        Macie["Amazon Macie"]
+        
+        CDN["CloudFront CDN"] --> Shield
+        ALB["Application Load Balancer"] --> WAF
+        DataStorage["Data Storage"] --> Macie
+        GuardDuty --> SecurityHub
+    end
+```
 
-### Compliance
-- Access control implementation
-- Audit logging
-- Security monitoring
-- Compliance reporting
+### Security Components
+1. **Edge Security**
+   - AWS Shield Advanced for DDoS protection
+   - WAF rules and filtering
+   - Edge location protection
+   - Traffic inspection
+
+2. **Threat Detection**
+   - GuardDuty for threat detection
+   - Security Hub integration
+   - Automated response
+   - Incident management
+
+3. **Data Security**
+   - Macie for data discovery
+   - Data classification
+   - PII detection
+   - Compliance monitoring
+
+### Compliance Framework
+1. **Access Control**
+   - IAM policies
+   - Service roles
+   - Resource-based policies
+   - Permission boundaries
+
+2. **Audit System**
+   - CloudTrail logging
+   - Security monitoring
+   - Compliance reporting
+   - Access tracking
 
 ## 8. Cost Optimization
 
-### Resource Management
-- Auto-scaling policies
-- Resource utilization monitoring
-- Cost-effective storage solutions
-- Performance vs. cost balancing
+```mermaid
+flowchart TD
+    subgraph CostOptimization["Cost Optimization"]
+        S3LifeCycle["S3 Lifecycle Policies"]
+        AutoScaling["Auto Scaling Groups"]
+        S3Intelligence["S3 Intelligence Tiering"]
+        
+        S3Primary["S3 Primary"] --> S3LifeCycle
+        ServiceMesh["Service Mesh"] --> AutoScaling
+        S3Primary --> S3Intelligence
+    end
+```
 
-### Optimization Strategies
-- Reserved instances utilization
-- Spot instance implementation
-- Storage tiering
-- Cache optimization
+### Cost Management Components
+1. **Storage Optimization**
+   - S3 Lifecycle Policies
+   - Intelligent Tiering
+   - Storage class analysis
+   - Automatic archival
+
+2. **Compute Optimization**
+   - Auto Scaling Groups
+   - Spot Instance usage
+   - Reserved Instance planning
+   - Resource right-sizing
+
+### Cost Control Strategies
+1. **Resource Management**
+   - Utilization monitoring
+   - Cost allocation tags
+   - Budget alerts
+   - Usage analytics
+
+2. **Performance Optimization**
+   - Cache utilization
+   - Query optimization
+   - Traffic management
+   - Resource scheduling
 
 ## Implementation Timeline
 1. Infrastructure setup and ALB implementation
