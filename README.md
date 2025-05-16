@@ -1,6 +1,6 @@
 # Our Journey: From Monolith to Modern Architecture
 
-Hey there! 👋 This document walks you through our system's evolution from a single-server monolith to a scalable, cloud-native powerhouse. Whether you're a developer, architect, or stakeholder, you'll find everything you need to understand our transformation journey.
+Hey there! This document walks you through our system's evolution from a single-server monolith to a scalable, cloud-native powerhouse. Whether you're a developer, architect, or stakeholder, you'll find everything you need to understand our transformation journey.
 
 ## Quick Navigation
 1. [Current System Architecture](#1-current-system-architecture)
@@ -82,7 +82,7 @@ graph TD
 
 ### What We Have Now
 Here's what we're working with:
-- Everything runs on one EC2 instance (yes, really!) 🏢
+- Everything runs on one EC2 instance (yes, really!)
 - We've got a basic API Gateway/Load Balancer handling traffic
 - S3 takes care of our image storage
 - Our monolithic app includes:
@@ -95,7 +95,7 @@ Here's what we're working with:
   - Third-party API integrations
 
 ### Pain Points We're Solving
-- Can't scale when we need to 😓
+- Can't scale when we need to
 - If our server goes down, everything goes down
 - All our code is tightly coupled - change one thing, worry about everything
 - Updates are becoming a nightmare
@@ -607,29 +607,29 @@ flowchart TD
 
 ## Our Game Plan
 Here's how we'll tackle this transformation:
-1. First up: Setting up our new infrastructure backbone with ALB 🏗️
-2. Adding CDN for that sweet performance boost 🚀
-3. Breaking down our monolith, one service at a time 🔨
-4. Supercharging our storage layer 💾
-5. Getting our container orchestra playing in harmony 🎵
-6. Adding eyes and ears to our system (observability) 👀
-7. Locking everything down tight (security) 🔒
-8. Making sure we're not breaking the bank (cost optimization) 💰
+1. First up: Setting up our new infrastructure backbone with ALB
+2. Adding CDN for that sweet performance boost
+3. Breaking down our monolith, one service at a time
+4. Supercharging our storage layer
+5. Getting our container orchestra playing in harmony
+6. Adding eyes and ears to our system (observability)
+7. Locking everything down tight (security)
+8. Making sure we're not breaking the bank (cost optimization)
 
 ## What We'll Gain
 Here's what makes this journey worth it:
-- Scale up or down instantly based on demand 📈
-- Problems in one service won't crash everything else 🛡️
-- Deploy updates without sweating bullets 🎯
-- See exactly what's happening in our system 🔍
-- Use (and pay for) only what we need 💡
-- Keep costs under control 💰
-- Happy developers who can ship faster 🚀
-- Lightning-fast experience for our users ⚡
+- Scale up or down instantly based on demand
+- Problems in one service won't crash everything else
+- Deploy updates without sweating bullets
+- See exactly what's happening in our system
+- Use (and pay for) only what we need
+- Keep costs under control
+- Happy developers who can ship faster
+- Lightning-fast experience for our users
 
-## Let's Talk: Key Discussion Points 🤝
+## Let's Talk: Key Discussion Points
 
-### 1. Scaling Like a Pro 📈
+### 1. Scaling Like a Pro
 
 Our infrastructure scales both horizontally and vertically based on real-world usage patterns. Here's what triggers our scaling:
 
@@ -646,7 +646,7 @@ Each service has its own scaling rules:
 - Auth Service: Request count and active sessions
 - Storage Service: IOPS and throughput
 
-### 2. Going Beyond AWS? 🌎
+### 2. Going Beyond AWS?
 
 Yep, we do step outside the AWS ecosystem when it makes sense! Here's where and why:
 
@@ -663,7 +663,7 @@ Yep, we do step outside the AWS ecosystem when it makes sense! Here's where and 
   - *Why?* Better visualization and AI-driven insights
   - *Trade-off:* More expensive than CloudWatch, but more powerful features
 
-### 3. Zero-Downtime? No Sweat! 🎯
+### 3. Zero-Downtime? No Sweat!
 
 Here's our zero-downtime deployment strategy:
 
@@ -677,7 +677,7 @@ Here's our zero-downtime deployment strategy:
    - Health checks before adding to load balancer
    - Automatic rollback if health checks fail
 
-### 4. Infrastructure as Code FTW! 🏗️
+### 4. Infrastructure as Code FTW!
 
 #### How We Manage It
 - **Terraform** for infrastructure provisioning
@@ -698,7 +698,7 @@ Here's our zero-downtime deployment strategy:
 - Cross-region data replication
 - Regional auto-scaling groups
 
-### 5. Keep Your Eyes on the Prize 👀
+### 5. Keep Your Eyes on the Prize
 
 #### Critical Metrics We Track
 1. **User Experience**
@@ -725,7 +725,7 @@ Here's our zero-downtime deployment strategy:
 - Grafana for visualization
 - PagerDuty for alerting
 
-### 6. Developer Access Made Safe 🔐
+### 6. Developer Access Made Safe
 
 Here's how our devs get in:
 
@@ -741,7 +741,7 @@ Here's how our devs get in:
    - Bastion hosts for direct access
    - Local development environments with Docker
 
-### 7. Smart Storage, Happy Wallet 💰
+### 7. Smart Storage, Happy Wallet
 
 #### Cost Optimization Strategies
 1. **S3 Lifecycle Management**
@@ -765,6 +765,3 @@ Here's how our devs get in:
    - Text compression for logs
    - Database compression
 
-Want to dive deeper into any of these topics? Let's chat! 🎉
-
----
